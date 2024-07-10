@@ -20,7 +20,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          packageManager: pnpm
+          # packageManager: pnpm
       - name: Set bot webhook
         env:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
