@@ -10,9 +10,16 @@
  *
  * Learn more at https://developers.cloudflare.com/workers/
  */
+import { Bot, Context, webhookCallback } from "grammy";
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
-		return new Response('Hello World!');
+		const bot = new Bot(env.BOT_TOKEN, { botInfo: JSON.parse(env.BOT_INFO) });
+
+		bot.command("start", async (ctx: Context) => {
+			await ctx.reply("Hello, Brother blockchain!");
+		});
+
+		return webhookCallback(bot, "cloudflare-mod")(request);
 	},
 } satisfies ExportedHandler<Env>;
