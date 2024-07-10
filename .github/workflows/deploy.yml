@@ -1,0 +1,27 @@
+name: Deploy Worker
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    name: Deploy
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build & Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          packageManager: pnpm
+      - name: Set bot webhook
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          curl -v "https://api.telegram.org/bot$BOT_TOKEN/setWebhook?url=$DEPLOYMENT_URL"
