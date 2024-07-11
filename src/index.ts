@@ -10,15 +10,52 @@
  *
  * Learn more at https://developers.cloudflare.com/workers/
  */
-import { Bot, Context, webhookCallback } from "grammy";
+import { Bot, Composer, Context, NextFunction, webhookCallback } from "grammy";
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const bot = new Bot(env.BOT_TOKEN, { botInfo: JSON.parse(env.BOT_INFO) });
 
+		/** 统计 bot 的响应时间，并将其记录到 `console`。 */
+		async function responseTime(
+			ctx: Context,
+			next: NextFunction, // 这是 `() => Promise<void>` 的一个别名
+		): Promise<void> {
+			// 开始计时
+			const before = Date.now(); // 毫秒
+			// 调用下游的中间件
+			await next(); // 请务必使用 `await`！
+			// 停止计时
+			const after = Date.now(); // 毫秒
+			// 打印时间差
+			// console.log(`Response time: ${after - before} ms`);
+			ctx.reply(`响应时间：${after - before} 毫秒`);
+		}
+
+		const composer = new Composer();
+
+		bot.use(composer);
+
+		composer.use(responseTime);
+
 		bot.command("start", async (ctx: Context) => {
 			await ctx.reply("Hello, Brother blockchain!");
 		});
+
+		bot.on("::mention", async (ctx: Context) => {
+			await ctx.reply(`有人在叫我吗？我知道了！`, {
+				reply_parameters: {
+					message_id: ctx.msg?.message_id || 0
+				},
+				reply_markup: {
+					force_reply: true,
+					// inline_keyboard: [
+					// 	[{ text: '赞', callback_data: 'like' }],
+					// 	[{ text: '踩', callback_data: 'dislike' }]
+					// ]
+				}
+			})
+		})
 
 		return webhookCallback(bot, "cloudflare-mod")(request);
 	},
