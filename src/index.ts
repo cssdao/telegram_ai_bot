@@ -43,7 +43,34 @@ export default {
 		});
 
 		bot.on("::mention", async (ctx: Context) => {
-			await ctx.reply(`有人在叫我吗？我知道了！`, {
+			const { username } = await bot.api.getMe();
+			const botUsername = `@${username}`;
+			console.info(ctx.message?.text, ctx.chat?.type);
+			// 检查消息是否来自频道
+			if (ctx.chat?.type !== "supergroup") return;
+			if (!ctx.message?.text?.includes(botUsername)) return;
+			let messageText = '';
+
+			if (ctx.message?.text) {
+				messageText = ctx.message.text.replace(botUsername, '').trim();
+			} else {
+				await ctx.reply(`我现在只支持文字互动，请发文字与我互动`, {
+					reply_parameters: {
+						message_id: ctx.msg?.message_id || 0
+					},
+					reply_markup: {
+						force_reply: true,
+						// inline_keyboard: [
+						// 	[{ text: '赞', callback_data: 'like' }],
+						// 	[{ text: '踩', callback_data: 'dislike' }]
+						// ]
+					}
+				})
+
+				return;
+			}
+			console.info('收到消息：', messageText);
+			await ctx.reply(`有人在叫我吗？我知道了！${messageText}`, {
 				reply_parameters: {
 					message_id: ctx.msg?.message_id || 0
 				},
