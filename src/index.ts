@@ -10,7 +10,7 @@
  *
  * Learn more at https://developers.cloudflare.com/workers/
  */
-import { Bot, Composer, Context, NextFunction, webhookCallback } from "grammy";
+import { Bot, Composer, Context, GrammyError, HttpError, NextFunction, webhookCallback } from "grammy";
 import Groq from "groq-sdk";
 
 function escapeMarkdown(text: string) {
@@ -61,7 +61,6 @@ export default {
 		bot.chatType("supergroup").on("message:new_chat_members", async (ctx) => {
 			// 获取新加入的成员列表
 			const newMembers = ctx.message.new_chat_members;
-			console.info("new member: ", ctx);
 
 			for (const member of newMembers) {
 				// 构建欢迎消息
@@ -89,29 +88,57 @@ ${personalizedMessage}
 			if (!messageText) return;
 			console.info('私聊消息：', messageText);
 			const replay = await ctx.reply("...")
-			console.info("replay: ", replay);
 			let fullText = "";
-			const stream = await groq.chat.completions.create({
-				messages: [
-					{
-						"role": "system", "content": ""
-					},
-					{
-						role: "user",
-						content: messageText,
-					},
-				],
-				model: "gemma2-9b-it",
-				stream: true
-			});
-			for await (const chunk of stream) {
-				const { choices = [] } = chunk;
-				const { finish_reason = '', delta: { content = '' } = {} } = choices[0] || {};
-				fullText += content
+			try {
+				// const stream = await groq.chat.completions.create({
+				// 	messages: [
+				// 		{
+				// 			"role": "system", "content": ""
+				// 		},
+				// 		{
+				// 			role: "user",
+				// 			content: messageText,
+				// 		},
+				// 	],
+				// 	model: "gemma2-9b-it",
+				// 	stream: true
+				// });
+				// for await (const chunk of stream) {
+				// 	console.info("chunk: ", chunk)
+				// 	const { choices = [] } = chunk;
+				// 	const { finish_reason = '', delta: { content = '' } = {} } = choices[0] || {};
+
+				// 	if (!content?.trimEnd()) continue;
+				// 	console.info("fullText: ", fullText, '-', content)
+				// 	fullText += content.trimEnd()
+
+				// 	await bot.api.editMessageText(
+				// 		replay.chat.id,
+				// 		replay.message_id,
+				// 		fullText
+				// 	)
+				// }
+				const chatCompletion = await groq.chat.completions.create({
+					messages: [
+						{
+							"role": "user",
+							"content": messageText
+						}
+					],
+					model: "gemma2-9b-it"
+				})
+
 				await bot.api.editMessageText(
 					replay.chat.id,
 					replay.message_id,
-					fullText
+					chatCompletion.choices[0]?.message?.content || ""
+				)
+			} catch (error) {
+				// console.error(error)
+				await bot.api.editMessageText(
+					replay.chat.id,
+					replay.message_id,
+					"发生了未知错误"
 				)
 			}
 		})
@@ -119,7 +146,6 @@ ${personalizedMessage}
 		bot.chatType("supergroup").on("::mention", async (ctx: Context) => {
 			const { username } = await bot.api.getMe();
 			const botUsername = `@${username}`;
-			console.info(ctx.message?.text, ctx.chat?.type);
 
 			if (!ctx.message?.text?.includes(botUsername)) return;
 			let messageText = '';
@@ -143,71 +169,85 @@ ${personalizedMessage}
 				return;
 			}
 			console.info('群聊消息：', messageText);
-			// const response = await fetch('http://localhost:11434/api/chat', {
-			// 	method: "POST",
-			// 	headers: {
-			// 		'Content-Type': 'application/json',
-			// 	},
-			// 	body: JSON.stringify({
-			// 		"model": "gemma2",
-			// 		"messages": [
-			// 			{
-			// 				"role": "user",
-			// 				"content": messageText
-			// 			}
-			// 		],
-			// 		"stream": false
-			// 	})
-			// })
-			// const data = await response.json();
-			// await ctx.reply(
-			// 	escapeMarkdown(data?.message?.content),
-			// 	// messageText,
-			// 	{
-			// 		parse_mode: "MarkdownV2",
-			// 		reply_parameters: {
-			// 			message_id: ctx.msg?.message_id || 0
-			// 		},
-			// 		reply_markup: {
-			// 			force_reply: true,
-			// 			// inline_keyboard: [
-			// 			// 	[{ text: '赞', callback_data: 'like' }],
-			// 			// 	[{ text: '踩', callback_data: 'dislike' }]
-			// 			// ]
-			// 		}
-			// 	})
 
-			let replay = await ctx.reply("...", {
+			const replay = await ctx.reply("...", {
 				reply_parameters: {
 					message_id: ctx.message.message_id
 				}
 			})
-			console.info("replay: ", replay);
 			let fullText = "";
-			const stream = await groq.chat.completions.create({
-				messages: [
-					{
-						"role": "system", "content": ""
-					},
-					{
-						role: "user",
-						content: messageText,
-					},
-				],
-				model: "gemma2-9b-it",
-				stream: true
-			});
-			for await (const chunk of stream) {
-				const { choices = [] } = chunk;
-				const { finish_reason = '', delta: { content = '' } = {} } = choices[0] || {};
-				fullText += content
+			try {
+				// const stream = await groq.chat.completions.create({
+				// 	messages: [
+				// 		{
+				// 			"role": "system", "content": ""
+				// 		},
+				// 		{
+				// 			role: "user",
+				// 			content: messageText,
+				// 		},
+				// 	],
+				// 	model: "gemma2-9b-it",
+				// 	stream: true
+				// });
+				// for await (const chunk of stream) {
+				// 	const { choices = [] } = chunk;
+				// 	const { finish_reason = '', delta: { content = '' } = {} } = choices[0] || {};
+				// 	fullText += content
+				// 	await bot.api.editMessageText(
+				// 		replay.chat.id,
+				// 		replay.message_id,
+				// 		fullText
+				// 	)
+				// }
+				const chatCompletion = await groq.chat.completions.create({
+					messages: [
+						{
+							"role": "user",
+							"content": messageText
+						}
+					],
+					model: "gemma2-9b-it"
+				})
+
 				await bot.api.editMessageText(
 					replay.chat.id,
 					replay.message_id,
-					fullText
+					chatCompletion.choices[0]?.message?.content || ""
+				)
+			} catch (error) {
+				console.error(error)
+				await bot.api.editMessageText(
+					replay.chat.id,
+					replay.message_id,
+					"发生了未知错误"
 				)
 			}
 		})
+
+		bot.catch(async (err) => {
+			const ctx = err.ctx;
+			console.error(`Error while handling update ${ctx.update.update_id}:`);
+			const e = err.error;
+
+			let errorMessage = "抱歉，发生了一个错误。我们会尽快修复它。";
+
+			if (e instanceof GrammyError) {
+				console.error("Error in request:", e.description);
+				errorMessage = "抱歉，我暂时无法完成这个请求。请稍后再试。";
+			} else if (e instanceof HttpError) {
+				console.error("Could not contact Telegram:", e);
+				errorMessage = "抱歉，我现在无法连接到 Telegram 服务器。请稍后再试。";
+			} else {
+				console.error("Unknown error:", e);
+			}
+
+			try {
+				await ctx.reply(errorMessage);
+			} catch (replyError) {
+				console.error("Error while sending error message to user:", replyError);
+			}
+		});
 
 		return webhookCallback(bot, "cloudflare-mod")(request);
 	},
