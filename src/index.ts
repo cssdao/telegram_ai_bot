@@ -11,10 +11,29 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 import { Bot, Composer, Context, NextFunction, webhookCallback } from "grammy";
+import Groq from "groq-sdk";
+
+function escapeMarkdown(text: string) {
+	return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+}
+
+const welcomeMessages = [
+	"欢迎 {name} 加入我们的大家庭！希望你在这里能找到志同道合的朋友。",
+	"嘿，{name}！很高兴你来到这里。我们准备了热茶和小饼干，快来聊聊天吧！",
+	"{name} 来啦！我们的圈子因为你的加入而变得更精彩。",
+	"热烈欢迎 {name}！这里就是你的第二个家，随时感到自在哦。",
+	"看看是谁来了？{name}，欢迎你！我们迫不及待想听听你的故事了。",
+	"嗨 {name}，欢迎登船！系好安全带，我们准备启程去探险啦！",
+	"{name} 成功加入我们的小队！准备好一起学习、分享和成长了吗？",
+	"欢迎 {name} 来到我们的知识乐园！这里的每一天都有新发现哦。",
+	"哇！{name} 来了！我们的话题圈又添一位有趣的灵魂。",
+	"亲爱的 {name}，从现在开始，你就是我们中的一员啦！一起来创造美好回忆吧。"
+];
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const bot = new Bot(env.BOT_TOKEN, { botInfo: JSON.parse(env.BOT_INFO) });
+		const groq = new Groq({ apiKey: env.GROQ_API_KEY });
 
 		/** 统计 bot 的响应时间，并将其记录到 `console`。 */
 		async function responseTime(
@@ -36,18 +55,72 @@ export default {
 
 		bot.use(composer);
 
-		composer.use(responseTime);
+		// composer.use(responseTime);
 
-		bot.command("start", async (ctx: Context) => {
-			await ctx.reply("Hello, Brother blockchain!");
+		// 监听新成员加入事件
+		bot.chatType("supergroup").on("message:new_chat_members", async (ctx) => {
+			// 获取新加入的成员列表
+			const newMembers = ctx.message.new_chat_members;
+			console.info("new member: ", ctx);
+
+			for (const member of newMembers) {
+				// 构建欢迎消息
+				const randomMessage = welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)];
+				const name = member.username ? `@${member.username}` : (member.first_name + (member.last_name || '')).trim();
+				const personalizedMessage = randomMessage.replace("{name}", name);
+				const message = `
+${personalizedMessage}
+
+🌟 这里有几个小贴士帮你快速融入我们：
+1️⃣ 可以简单介绍下自己哦
+2️⃣ 看看群置顶，了解我们的日常话题
+3️⃣ 随时提问，大家都很乐意帮忙
+
+再次欢迎你的加入！让我们一起度过愉快的时光吧~ 😊
+    `;
+				// 发送欢迎消息
+				await ctx.reply(message);
+			}
 		});
 
-		bot.on("::mention", async (ctx: Context) => {
+		bot.chatType("private").on("message", async (ctx: Context) => {
+			const messageText = ctx.message?.text;
+
+			if (!messageText) return;
+			console.info('私聊消息：', messageText);
+			const replay = await ctx.reply("...")
+			console.info("replay: ", replay);
+			let fullText = "";
+			const stream = await groq.chat.completions.create({
+				messages: [
+					{
+						"role": "system", "content": ""
+					},
+					{
+						role: "user",
+						content: messageText,
+					},
+				],
+				model: "gemma2-9b-it",
+				stream: true
+			});
+			for await (const chunk of stream) {
+				const { choices = [] } = chunk;
+				const { finish_reason = '', delta: { content = '' } = {} } = choices[0] || {};
+				fullText += content
+				await bot.api.editMessageText(
+					replay.chat.id,
+					replay.message_id,
+					fullText
+				)
+			}
+		})
+
+		bot.chatType("supergroup").on("::mention", async (ctx: Context) => {
 			const { username } = await bot.api.getMe();
 			const botUsername = `@${username}`;
 			console.info(ctx.message?.text, ctx.chat?.type);
-			// 检查消息是否来自频道
-			if (ctx.chat?.type !== "supergroup") return;
+
 			if (!ctx.message?.text?.includes(botUsername)) return;
 			let messageText = '';
 
@@ -69,19 +142,71 @@ export default {
 
 				return;
 			}
-			console.info('收到消息：', messageText);
-			await ctx.reply(`有人在叫我吗？我知道了！${messageText}`, {
+			console.info('群聊消息：', messageText);
+			// const response = await fetch('http://localhost:11434/api/chat', {
+			// 	method: "POST",
+			// 	headers: {
+			// 		'Content-Type': 'application/json',
+			// 	},
+			// 	body: JSON.stringify({
+			// 		"model": "gemma2",
+			// 		"messages": [
+			// 			{
+			// 				"role": "user",
+			// 				"content": messageText
+			// 			}
+			// 		],
+			// 		"stream": false
+			// 	})
+			// })
+			// const data = await response.json();
+			// await ctx.reply(
+			// 	escapeMarkdown(data?.message?.content),
+			// 	// messageText,
+			// 	{
+			// 		parse_mode: "MarkdownV2",
+			// 		reply_parameters: {
+			// 			message_id: ctx.msg?.message_id || 0
+			// 		},
+			// 		reply_markup: {
+			// 			force_reply: true,
+			// 			// inline_keyboard: [
+			// 			// 	[{ text: '赞', callback_data: 'like' }],
+			// 			// 	[{ text: '踩', callback_data: 'dislike' }]
+			// 			// ]
+			// 		}
+			// 	})
+
+			let replay = await ctx.reply("...", {
 				reply_parameters: {
-					message_id: ctx.msg?.message_id || 0
-				},
-				reply_markup: {
-					force_reply: true,
-					// inline_keyboard: [
-					// 	[{ text: '赞', callback_data: 'like' }],
-					// 	[{ text: '踩', callback_data: 'dislike' }]
-					// ]
+					message_id: ctx.message.message_id
 				}
 			})
+			console.info("replay: ", replay);
+			let fullText = "";
+			const stream = await groq.chat.completions.create({
+				messages: [
+					{
+						"role": "system", "content": ""
+					},
+					{
+						role: "user",
+						content: messageText,
+					},
+				],
+				model: "gemma2-9b-it",
+				stream: true
+			});
+			for await (const chunk of stream) {
+				const { choices = [] } = chunk;
+				const { finish_reason = '', delta: { content = '' } = {} } = choices[0] || {};
+				fullText += content
+				await bot.api.editMessageText(
+					replay.chat.id,
+					replay.message_id,
+					fullText
+				)
+			}
 		})
 
 		return webhookCallback(bot, "cloudflare-mod")(request);
