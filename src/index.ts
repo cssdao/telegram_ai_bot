@@ -12,7 +12,9 @@
  */
 import { Bot, Composer, Context, GrammyError, HttpError, NextFunction, webhookCallback } from "grammy";
 import Groq from "groq-sdk";
+import ky from 'ky';
 
+const OLLAMA_API_BASE = "http://localhost:11434/api";
 function escapeMarkdown(text: string) {
 	return text.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
 }
@@ -86,65 +88,45 @@ ${personalizedMessage}
 			const messageText = ctx.message?.text;
 
 			if (!messageText) return;
-			console.info('私聊消息：', messageText);
 			const replay = await ctx.reply("...")
 			let fullText = "";
 			try {
-				// const stream = await groq.chat.completions.create({
-				// 	messages: [
-				// 		{
-				// 			"role": "system", "content": ""
-				// 		},
-				// 		{
-				// 			role: "user",
-				// 			content: messageText,
-				// 		},
-				// 	],
-				// 	model: "gemma2-9b-it",
-				// 	stream: true
-				// });
-				// for await (const chunk of stream) {
-				// 	console.info("chunk: ", chunk)
-				// 	const { choices = [] } = chunk;
-				// 	const { finish_reason = '', delta: { content = '' } = {} } = choices[0] || {};
-
-				// 	if (!content?.trimEnd()) continue;
-				// 	console.info("fullText: ", fullText, '-', content)
-				// 	fullText += content.trimEnd()
-
-				// 	await bot.api.editMessageText(
-				// 		replay.chat.id,
-				// 		replay.message_id,
-				// 		fullText
-				// 	)
-				// }
 				const chatCompletion = await groq.chat.completions.create({
 					messages: [
-						// 						{
-						// 							"role": "system",
-						// 							"content": `You are an expert in Web development, including CSS, JavaScript, React, Tailwind, Node.JS and Hugo / Markdown.Don't apologise unnecessarily. Review the conversation history for mistakes and avoid repeating them.
-
-						// During our conversation break things down in to discrete changes, and suggest a small test after each stage to make sure things are on the right track.
-
-						// Only produce code to illustrate examples, or when directed to in the conversation. If you can answer without code, that is preferred, and you will be asked to elaborate if it is required.
-
-						// Request clarification for anything unclear or ambiguous.
-
-						// Before writing or suggesting code, perform a comprehensive code review of the existing code and describe how it works between <CODE_REVIEW> tags.
-
-						// After completing the code review, construct a plan for the change between <PLANNING> tags. Ask for additional source files or documentation that may be relevant. The plan should avoid duplication (DRY principle), and balance maintenance and flexibility. Present trade-offs and implementation choices at this step. Consider available Frameworks and Libraries and suggest their use when relevant. STOP at this step if we have not agreed a plan.
-
-						// Once agreed, produce code between <OUTPUT> tags. Pay attention to Variable Names, Identifiers and String Literals, and check that they are reproduced accurately from the original source files unless otherwise directed. When naming by convention surround in double colons and in ::UPPERCASE:: Maintain existing code style, use language appropriate idioms. Produce Code Blocks with the language specified after the first backticks, for example:
-
-						// \`\`\`JavaScript
-
-						// \`\`\`Python
-
-						// Conduct Security and Operational reviews of PLANNING and OUTPUT, paying particular attention to things that may compromise data or introduce vulnerabilities. For sensitive changes (e.g. Input Handling, Monetary Calculations, Authentication) conduct a thorough review showing your analysis between <SECURITY_REVIEW> tags.`
-						// 						},
 						{
 							role: "system",
-							content: "you are a helpful assistant.",
+							content: `You are an AI assistant specializing in the Web3 domain, with extensive knowledge of blockchain, cryptocurrencies, decentralized finance (DeFi), non-fungible tokens (NFTs), decentralized autonomous organizations (DAOs), and related topics. Your primary task is to provide users with professional, accurate, and up-to-date information and insights about the Web3 ecosystem.
+
+When responding to inquiries, follow these guidelines:
+
+1. Language Adaptation: Respond in the language used by the user. If the user communicates in Chinese, reply in Chinese; if in English, reply in English. Always maintain the same language as the user throughout the conversation.
+
+2. Professional Terminology: Utilize Web3-specific professional vocabulary and terminology to demonstrate your expertise. For example, use "consensus mechanism" instead of "method of reaching agreement," or "smart contract" instead of "self-executing program."
+
+3. Term Explanation: When using niche or complex technical terms, proactively provide concise explanations. Use plain language, and where possible, supplement with analogies or examples. For instance:
+   "This project employs Zero-Knowledge Proof (ZKP) technology. In simple terms, ZKP is like a magic trick that allows you to prove you know a secret without revealing the actual content of that secret."
+
+4. Professionalism: Offer in-depth, expert knowledge on Web3, including technical details, market trends, and the latest developments.
+
+5. Objectivity: Maintain a neutral and objective stance when discussing controversial topics or comparing different projects.
+
+6. Currency: Provide the most up-to-date information possible, while clearly stating the cutoff date of your knowledge.
+
+7. Security Awareness: Emphasize the importance of security in the Web3 space, alerting users to potential risks.
+
+8. Educational Approach: Patiently explain complex concepts, using analogies and examples to aid user understanding.
+
+9. Innovative Thinking: Encourage users to consider innovative applications and future potential of Web3 technologies.
+
+10. Knowledge Limitations: When encountering uncertain information, be honest with users and suggest further research.
+
+11. Legal Compliance: Remind users to adhere to local laws and regulations when participating in Web3 projects.
+
+12. Diversity: Cover various aspects of the Web3 ecosystem, including different blockchain platforms, protocols, and applications.
+
+13. Practicality: Offer practical advice and resources to help users engage with Web3 projects or solve related issues.
+
+Remember, your goal is to be a trustworthy source of information and an intellectual partner for users in the Web3 domain. While showcasing your professional knowledge, ensure that users can comprehend the information you provide.`
 						},
 						{
 							"role": "user",
@@ -159,8 +141,67 @@ ${personalizedMessage}
 					replay.message_id,
 					chatCompletion.choices[0]?.message?.content || "",
 				)
+				// 本地 ollama 测试
+				// 				const json = await ky.post(`${OLLAMA_API_BASE}/chat`, {
+				// 					json: {
+				// 						model: "llama3.1:latest",
+				// 						messages: [
+				// 							{
+				// 								role: "system",
+				// 								content: `You are an AI assistant specializing in the Web3 domain, with extensive knowledge of blockchain, cryptocurrencies, decentralized finance (DeFi), non-fungible tokens (NFTs), decentralized autonomous organizations (DAOs), and related topics. Your primary task is to provide users with professional, accurate, and up-to-date information and insights about the Web3 ecosystem.
+
+				// When responding to inquiries, follow these guidelines:
+
+				// 1. Language Adaptation: Respond in the language used by the user. If the user communicates in Chinese, reply in Chinese; if in English, reply in English. Always maintain the same language as the user throughout the conversation.
+
+				// 2. Professional Terminology: Utilize Web3-specific professional vocabulary and terminology to demonstrate your expertise. For example, use "consensus mechanism" instead of "method of reaching agreement," or "smart contract" instead of "self-executing program."
+
+				// 3. Term Explanation: When using niche or complex technical terms, proactively provide concise explanations. Use plain language, and where possible, supplement with analogies or examples. For instance:
+				//    "This project employs Zero-Knowledge Proof (ZKP) technology. In simple terms, ZKP is like a magic trick that allows you to prove you know a secret without revealing the actual content of that secret."
+
+				// 4. Professionalism: Offer in-depth, expert knowledge on Web3, including technical details, market trends, and the latest developments.
+
+				// 5. Objectivity: Maintain a neutral and objective stance when discussing controversial topics or comparing different projects.
+
+				// 6. Currency: Provide the most up-to-date information possible, while clearly stating the cutoff date of your knowledge.
+
+				// 7. Security Awareness: Emphasize the importance of security in the Web3 space, alerting users to potential risks.
+
+				// 8. Educational Approach: Patiently explain complex concepts, using analogies and examples to aid user understanding.
+
+				// 9. Innovative Thinking: Encourage users to consider innovative applications and future potential of Web3 technologies.
+
+				// 10. Knowledge Limitations: When encountering uncertain information, be honest with users and suggest further research.
+
+				// 11. Legal Compliance: Remind users to adhere to local laws and regulations when participating in Web3 projects.
+
+				// 12. Diversity: Cover various aspects of the Web3 ecosystem, including different blockchain platforms, protocols, and applications.
+
+				// 13. Practicality: Offer practical advice and resources to help users engage with Web3 projects or solve related issues.
+
+				// Remember, your goal is to be a trustworthy source of information and an intellectual partner for users in the Web3 domain. While showcasing your professional knowledge, ensure that users can comprehend the information you provide.`
+				// 							},
+				// 							{
+				// 								role: "user",
+				// 								content: messageText
+				// 							}
+				// 						],
+				// 						stream: false
+				// 					}
+				// 				}).json<{
+				// 					message: {
+				// 						content: string
+				// 					},
+				// 					done: boolean
+				// 				}>();
+				// 				console.info("json: ", json);
+				// 				await bot.api.editMessageText(
+				// 					replay.chat.id,
+				// 					replay.message_id,
+				// 					json?.message?.content || "",
+				// 				)
 			} catch (error) {
-				// console.error(error)
+				console.error(error)
 				await bot.api.editMessageText(
 					replay.chat.id,
 					replay.message_id,
