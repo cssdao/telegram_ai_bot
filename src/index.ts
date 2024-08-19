@@ -117,8 +117,12 @@ ${personalizedMessage}
 			}
 		});
 
+		// 单独对话
 		bot.chatType("private").on("message", async (ctx: Context) => {
 			const messageText = ctx.message?.text;
+
+			// 使用本地 ollama 进行对话
+			
 
 			if (!messageText) return;
 			const replay = await ctx.reply("...")
